@@ -1,12 +1,12 @@
 import Link from "next/link";
-import { ChevronRight, LogOut, Users, Wallet } from "lucide-react";
+import { ChevronRight, ClipboardList, LogOut, Recycle, Users, Wallet } from "lucide-react";
 import { requireUser } from "@/lib/auth";
 import { logoutAction } from "@/app/login/actions";
 
 export default async function MorePage() {
   const user = await requireUser();
   const links = user.role === "admin"
-    ? [{ href: "/expenses", label: "Expenses", icon: Wallet }, { href: "/users", label: "Staff accounts", icon: Users }]
+    ? [{ href: "/stocktake", label: "Stock take & cylinder check", icon: ClipboardList }, { href: "/empties", label: "Empties & requisitions", icon: Recycle }, { href: "/expenses", label: "Expenses", icon: Wallet }, { href: "/users", label: "Staff accounts", icon: Users }]
     : [];
   return (
     <div className="mx-auto max-w-md space-y-4">

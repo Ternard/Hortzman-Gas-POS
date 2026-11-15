@@ -7,9 +7,10 @@ export default async function ProductsPage({ searchParams }: { searchParams: Pro
   const sp = await searchParams;
   const rows = await db()`SELECT * FROM products ORDER BY active DESC, category, selling_price, name`;
   const products = rows.map((r) => ({
-    id: r.id, name: r.name, category: r.category,
+    id: r.id, name: r.name, category: r.category, unit: r.unit as string,
     buying_price: num(r.buying_price), selling_price: num(r.selling_price),
-    stock: r.stock, low_stock_level: r.low_stock_level, track_stock: r.track_stock, active: r.active,
+    stock: num(r.stock), low_stock_level: num(r.low_stock_level), track_stock: r.track_stock, active: r.active,
+    tracks_empties: !!r.tracks_empties, empties: Number(r.empties ?? 0),
   }));
   return <ProductsClient products={products} welcome={!!sp.welcome} />;
 }

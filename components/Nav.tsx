@@ -1,13 +1,14 @@
 "use client";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ShoppingCart, Package, Receipt, BarChart3, Menu } from "lucide-react";
+import { ShoppingCart, Package, Receipt, BarChart3, Menu, HandCoins } from "lucide-react";
 
 export default function Nav({ role, mobile = false }: { role: "admin" | "cashier"; mobile?: boolean }) {
   const path = usePathname();
   const items = [
     { href: "/", label: "Sell", icon: ShoppingCart },
     ...(role === "admin" ? [{ href: "/products", label: "Stock", icon: Package }] : []),
+    { href: "/debts", label: "Debts", icon: HandCoins },
     { href: "/sales", label: "Sales", icon: Receipt },
     ...(role === "admin" ? [{ href: "/reports", label: "Reports", icon: BarChart3 }] : []),
     { href: "/more", label: "More", icon: Menu },

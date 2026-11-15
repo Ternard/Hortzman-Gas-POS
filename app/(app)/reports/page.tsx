@@ -2,7 +2,7 @@ import Link from "next/link";
 import { AlertTriangle } from "lucide-react";
 import { db, num } from "@/lib/db";
 import { requireAdmin } from "@/lib/auth";
-import { money, resolveRange } from "@/lib/format";
+import { money, qty, resolveRange } from "@/lib/format";
 import RangePicker from "@/components/RangePicker";
 
 export default async function ReportsPage({ searchParams }: { searchParams: Promise<Record<string, string>> }) {
@@ -17,22 +17,27 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       AND (created_at AT TIME ZONE 'Africa/Nairobi')::date BETWEEN ${from}::date AND ${to}::date`;
   const [exp] = await sql`SELECT coalesce(sum(amount),0) AS total FROM expenses
     WHERE expense_date BETWEEN ${from}::date AND ${to}::date`;
-  const byPay = await sql`SELECT payment_method, count(*)::int AS n, sum(total) AS total FROM sales
-    WHERE status = 'completed' AND (created_at AT TIME ZONE 'Africa/Nairobi')::date BETWEEN ${from}::date AND ${to}::date
-    GROUP BY payment_method ORDER BY total DESC`;
+  // Money actually received in this period (including payments on older pay-later bills)
+  const byPay = await sql`SELECT sp.method AS payment_method, count(*)::int AS n, sum(sp.amount) AS total
+    FROM sale_payments sp JOIN sales s ON s.id = sp.sale_id
+    WHERE s.status = 'completed' AND (sp.created_at AT TIME ZONE 'Africa/Nairobi')::date BETWEEN ${from}::date AND ${to}::date
+    GROUP BY sp.method ORDER BY total DESC`;
+  const [owed] = await sql`SELECT count(*)::int AS n, coalesce(sum(s.total - coalesce(p.paid, 0)), 0) AS amount FROM sales s
+    LEFT JOIN (SELECT sale_id, sum(amount) AS paid FROM sale_payments GROUP BY sale_id) p ON p.sale_id = s.id
+    WHERE s.status = 'completed' AND s.total - coalesce(p.paid, 0) > 0.004`;
   const byItem = await sql`
-    SELECT si.product_name, sum(si.quantity)::int AS qty, sum(si.quantity * si.unit_price) AS revenue,
+    SELECT si.product_name, si.unit, sum(si.quantity) AS qty, sum(si.quantity * si.unit_price) AS revenue,
            sum(si.quantity * (si.unit_price - si.unit_cost)) AS profit
     FROM sale_items si JOIN sales s ON s.id = si.sale_id
     WHERE s.status = 'completed' AND (s.created_at AT TIME ZONE 'Africa/Nairobi')::date BETWEEN ${from}::date AND ${to}::date
-    GROUP BY si.product_name ORDER BY revenue DESC`;
+    GROUP BY si.product_name, si.unit ORDER BY revenue DESC`;
   const daily = await sql`
     SELECT to_char((created_at AT TIME ZONE 'Africa/Nairobi')::date, 'YYYY-MM-DD') AS day, count(*)::int AS n,
            sum(total) AS revenue, sum(total - cost_total) AS profit
     FROM sales WHERE status = 'completed'
       AND (created_at AT TIME ZONE 'Africa/Nairobi')::date BETWEEN ${from}::date AND ${to}::date
     GROUP BY 1 ORDER BY 1 DESC`;
-  const low = await sql`SELECT id, name, stock, low_stock_level FROM products
+  const low = await sql`SELECT id, name, unit, stock, low_stock_level FROM products
     WHERE active AND track_stock AND stock <= low_stock_level ORDER BY stock`;
   const [inv] = await sql`SELECT coalesce(sum(stock * buying_price),0) AS cost_value, coalesce(sum(stock * selling_price),0) AS retail_value
     FROM products WHERE active AND track_stock`;
@@ -53,7 +58,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
       <RangePicker range={range} from={from} to={to} />
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Stat label="Sales (money in)" value={money(revenue)} />
+        <Stat label="Sales made" value={money(revenue)} />
         <Stat label="Cost of items sold" value={money(summary.cost)} />
         <Stat label="Gross profit" value={money(gross)} tone="text-green-700" />
         <Stat label={`Net profit (after ${money(expenses)} expenses)`} value={money(net)} tone={net < 0 ? "text-red-600" : "text-green-700"} />
@@ -68,7 +73,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
               <thead className="text-left text-xs text-stone-400"><tr><th className="pb-2">Item</th><th className="pb-2 text-right">Qty</th><th className="pb-2 text-right">Sales</th><th className="pb-2 text-right">Profit</th></tr></thead>
               <tbody className="divide-y divide-stone-100">
                 {byItem.map((r) => (
-                  <tr key={r.product_name}><td className="py-2 font-medium">{r.product_name}</td><td className="text-right">{r.qty}</td>
+                  <tr key={r.product_name + r.unit}><td className="py-2 font-medium">{r.product_name}</td><td className="text-right">{qty(r.qty, r.unit)}</td>
                     <td className="text-right">{money(r.revenue)}</td><td className="text-right text-green-700">{money(r.profit)}</td></tr>
                 ))}
               </tbody>
@@ -78,13 +83,18 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
 
         <div className="space-y-4">
           <div className="card">
-            <h2 className="mb-3 font-bold">Payments</h2>
+            <h2 className="mb-3 font-bold">Money received</h2>
             {byPay.length === 0 && <p className="text-sm text-stone-400">No payments.</p>}
             {byPay.map((p) => (
               <div key={p.payment_method} className="flex justify-between py-1 text-sm">
                 <span>{p.payment_method} <span className="text-stone-400">({p.n})</span></span><b>{money(p.total)}</b>
               </div>
             ))}
+            {owed.n > 0 && (
+              <Link href="/debts" className="mt-2 flex justify-between rounded-xl bg-amber-50 p-3 text-sm font-semibold text-amber-900">
+                <span>Still owed to you ({owed.n} bill{owed.n > 1 ? "s" : ""})</span><b>{money(owed.amount)}</b>
+              </Link>
+            )}
           </div>
           <div className="card">
             <h2 className="mb-3 font-bold">Stock on hand</h2>
@@ -93,7 +103,7 @@ export default async function ReportsPage({ searchParams }: { searchParams: Prom
             {low.length > 0 && (
               <div className="mt-3 rounded-xl bg-amber-50 p-3">
                 <p className="mb-1 flex items-center gap-1 text-sm font-semibold text-amber-900"><AlertTriangle size={15} /> Restock soon</p>
-                {low.map((l) => <p key={l.id} className="text-sm text-amber-900">{l.name}: <b>{l.stock}</b> left</p>)}
+                {low.map((l) => <p key={l.id} className="text-sm text-amber-900">{l.name}: <b>{qty(l.stock, l.unit)}</b> left</p>)}
                 <Link href="/products" className="mt-2 inline-block text-sm font-semibold text-orange-700">Go to stock →</Link>
               </div>
             )}

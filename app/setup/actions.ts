@@ -23,7 +23,8 @@ export async function setupAction(_: any, fd: FormData): Promise<{ error?: strin
     VALUES (${name}, ${username}, ${hash}, 'admin') RETURNING id, name, username, role`;
   if (seed) {
     for (const p of STARTER_PRODUCTS) {
-      await sql`INSERT INTO products (name, category) VALUES (${p.name}, ${p.category})`;
+      await sql`INSERT INTO products (name, category, unit, tracks_empties)
+        VALUES (${p.name}, ${p.category}, ${(p as any).unit ?? "pcs"}, ${p.category === "Gas Refill"})`;
     }
   }
   await createSession(u as any);

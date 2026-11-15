@@ -2,11 +2,13 @@ import { Flame } from "lucide-react";
 import Link from "next/link";
 import Nav from "@/components/Nav";
 import { requireUser } from "@/lib/auth";
+import { migrate } from "@/lib/schema";
 
 export const dynamic = "force-dynamic";
 
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const user = await requireUser();
+  await migrate();
   return (
     <div className="min-h-dvh pb-24 md:pb-8">
       <header className="no-print sticky top-0 z-20 border-b border-stone-200 bg-white/95 backdrop-blur">

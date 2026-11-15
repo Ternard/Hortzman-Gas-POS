@@ -11,7 +11,8 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
   const sql = db();
   const sales = await sql`
     SELECT s.id, s.receipt_no, s.total, s.cost_total, s.payment_method, s.status, s.created_at, u.name AS cashier,
-      (SELECT string_agg(si.product_name || ' ×' || si.quantity, ', ') FROM sale_items si WHERE si.sale_id = s.id) AS summary
+      s.total - coalesce((SELECT sum(amount) FROM sale_payments WHERE sale_id = s.id), 0) AS balance,
+      (SELECT string_agg(si.product_name || ' ×' || trim(trailing '.' from trim(trailing '0' from si.quantity::text)) || CASE WHEN si.unit = 'm' THEN ' m' ELSE '' END, ', ') FROM sale_items si WHERE si.sale_id = s.id) AS summary
     FROM sales s LEFT JOIN users u ON u.id = s.user_id
     WHERE (s.created_at AT TIME ZONE 'Africa/Nairobi')::date BETWEEN ${from}::date AND ${to}::date
       AND (${isAdmin} OR s.user_id = ${user.id})
@@ -45,6 +46,7 @@ export default async function SalesPage({ searchParams }: { searchParams: Promis
             <div className="text-right">
               <p className={`font-bold ${s.status === "voided" ? "text-stone-400 line-through" : ""}`}>{money(s.total)}</p>
               {s.status === "voided" && <p className="text-xs font-semibold text-red-600">VOIDED</p>}
+              {s.status === "completed" && num(s.balance) > 0.004 && <p className="text-xs font-semibold text-amber-700">Owes {money(s.balance)}</p>}
             </div>
           </Link>
         ))}

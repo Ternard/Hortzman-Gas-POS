@@ -6,6 +6,15 @@ export function money(n: unknown) {
   return "KES " + v.toLocaleString("en-KE", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
 }
 
+export const isMetres = (unit: unknown) => unit === "m";
+
+/** Format a quantity with its unit: "10" for pieces, "12.5 m" for metres. */
+export function qty(n: unknown, unit: unknown = "pcs") {
+  const v = Number(n ?? 0);
+  const s = v.toLocaleString("en-KE", { maximumFractionDigits: 3 });
+  return isMetres(unit) ? `${s} m` : s;
+}
+
 export function dateTime(d: string | Date) {
   return new Date(d).toLocaleString("en-KE", { timeZone: TZ, dateStyle: "medium", timeStyle: "short" });
 }
