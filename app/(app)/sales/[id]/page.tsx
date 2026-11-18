@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ShoppingCart } from "lucide-react";
 import { db, num } from "@/lib/db";
 import { requireUser } from "@/lib/auth";
 import { BUSINESS_NAME, dateTime, money, qty } from "@/lib/format";
@@ -46,9 +46,12 @@ export default async function ReceiptPage({ params, searchParams }: {
   return (
     <div className="mx-auto max-w-sm">
       {sp.new && (
-        <div className="no-print mb-4 flex items-center gap-2 rounded-xl bg-green-50 p-3 font-semibold text-green-800">
-          <CheckCircle2 size={20} /> Sale saved
-          {s.payment_method === "Cash" && change > 0 && <span className="ml-auto">Change: {money(change)}</span>}
+        <div className="no-print mb-4 rounded-xl bg-green-50 p-3 text-green-800">
+          <p className="flex items-center gap-2 font-semibold">
+            <CheckCircle2 size={20} /> Sale saved
+            {s.payment_method === "Cash" && change > 0 && <span className="ml-auto text-lg font-black">Change: {money(change)}</span>}
+          </p>
+          {onCredit && balance > 0 && <p className="mt-1 text-sm font-semibold text-amber-800">Customer still owes {money(balance)}</p>}
         </div>
       )}
       <div className="card print-area font-mono text-sm">
@@ -94,7 +97,7 @@ export default async function ReceiptPage({ params, searchParams }: {
       {onCredit && balance > 0 && s.status === "completed" && (
         <Link href="/debts" className="btn-ghost no-print mt-3 w-full">Record a payment for this bill</Link>
       )}
-      <Link href="/" className="btn-primary no-print mt-3 w-full">New sale</Link>
+      <Link href="/" className="btn-primary no-print mt-3 w-full"><ShoppingCart size={18} /> New sale</Link>
     </div>
   );
 }

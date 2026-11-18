@@ -98,7 +98,7 @@ export default function DebtsClient({ bills, today }: { bills: Bill[]; today: st
                   </div>
                   <div className="mt-2 flex gap-2">
                     <button className="btn-primary flex-1 px-3 py-2 text-sm" onClick={() => setOpen(open === b.id ? null : b.id)}>
-                      {open === b.id ? "Close" : "Record payment"}
+                      {open === b.id ? "Close" : "Customer paid"}
                     </button>
                     {g.phone && (
                       <a className="btn-ghost px-3 py-2 text-sm" title="Send a reminder" target="_blank" rel="noreferrer"

@@ -1,6 +1,8 @@
 import { Flame } from "lucide-react";
 import Link from "next/link";
 import Nav from "@/components/Nav";
+import HelpButton from "@/components/HelpButton";
+import OfflineBanner from "@/components/OfflineBanner";
 import { requireUser } from "@/lib/auth";
 import { migrate } from "@/lib/schema";
 
@@ -18,9 +20,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             <span className="font-black tracking-tight">HORTZMAN GAS</span>
           </Link>
           <Nav role={user.role} />
-          <span className="hidden text-sm text-stone-500 sm:block">{user.name}</span>
+          <div className="flex items-center gap-3">
+            <span className="hidden text-sm text-stone-500 sm:block">{user.name}</span>
+            <HelpButton />
+          </div>
         </div>
       </header>
+      <OfflineBanner />
       <main className="mx-auto max-w-6xl px-4 py-4">{children}</main>
       <Nav role={user.role} mobile />
     </div>

@@ -2,9 +2,12 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Minus, Plus, Search, ShoppingCart, Trash2, X } from "lucide-react";
+import { Banknote, CreditCard, HandCoins, Minus, Plus, Search, ShoppingCart, Smartphone, Star, Trash2, X } from "lucide-react";
 import { checkout } from "@/app/(app)/actions";
 import { isMetres, money, qty } from "@/lib/format";
+import { productIcon } from "@/lib/icons";
+
+const PAY_ICON = { Cash: Banknote, "M-Pesa": Smartphone, Card: CreditCard, Credit: HandCoins } as const;
 
 type Product = { id: number; name: string; category: string; unit: string; tracksEmpties: boolean; price: number; stock: number; track: boolean; low: number };
 
@@ -31,7 +34,7 @@ function MetreInput({ value, onChange }: { value: number; onChange: (v: number) 
   );
 }
 
-export default function PosClient({ products, isAdmin }: { products: Product[]; isAdmin: boolean }) {
+export default function PosClient({ products, isAdmin, popular = [], customers = [] }: { products: Product[]; isAdmin: boolean; popular?: number[]; customers?: string[] }) {
   const router = useRouter();
   const [cart, setCart] = useState<Record<number, number>>({});
   const [cat, setCat] = useState("All");
@@ -55,6 +58,10 @@ export default function PosClient({ products, isAdmin }: { products: Product[]; 
   const shown = products.filter(
     (p) => (cat === "All" || p.category === cat) && p.name.toLowerCase().includes(q.toLowerCase())
   );
+  // Best sellers go first (only when not searching/filtering, so nothing is shown twice)
+  const showPopular = cat === "All" && !q;
+  const popularItems = showPopular ? popular.map((id) => products.find((p) => p.id === id)).filter((p): p is Product => !!p) : [];
+  const rest = showPopular ? shown.filter((p) => !popular.includes(p.id)) : shown;
   const byId = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
   const lines = Object.entries(cart).map(([id, qty]) => ({ p: byId.get(Number(id))!, qty })).filter((l) => l.p);
   // Metre lines can sit at 0 while the cashier is typing a length; they don't count until they have a length.
@@ -131,12 +138,30 @@ export default function PosClient({ products, isAdmin }: { products: Product[]; 
     );
   }
 
+  const tile = (p: Product) => {
+    const inCart = cart[p.id] || 0;
+    const out = p.track && p.stock <= 0;
+    const low = p.track && p.stock > 0 && p.stock <= p.low;
+    const Icon = productIcon(p.name, p.category);
+    return (
+      <button key={p.id} onClick={() => add(p)} disabled={out}
+        className={`relative rounded-2xl bg-white p-3 text-left shadow-sm ring-1 transition active:scale-[0.97] disabled:opacity-40 ${inCart ? "ring-2 ring-orange-500" : "ring-stone-200"}`}>
+        {inCart > 0 && <span className="absolute right-2 top-2 rounded-full bg-orange-600 px-2 py-0.5 text-xs font-bold text-white">{qty(inCart, p.unit)}</span>}
+        <p className="flex items-start gap-1.5 pr-6 font-bold leading-tight"><Icon size={16} className="mt-0.5 shrink-0 text-orange-600" />{p.name}</p>
+        <p className="mt-2 text-lg font-black text-orange-700">{money(p.price)}{isMetres(p.unit) && <span className="text-xs font-semibold text-stone-500"> /m</span>}</p>
+        <p className={`text-xs font-semibold ${out ? "text-red-600" : low ? "text-amber-600" : "text-stone-400"}`}>
+          {!p.track ? "" : out ? "Out of stock" : low ? `Only ${qty(p.stock, p.unit)} left` : `${qty(p.stock, p.unit)} in stock`}
+        </p>
+      </button>
+    );
+  };
+
   const cartPanel = (
     <div className="flex h-full flex-col">
       <div className="flex items-center justify-between pb-3">
         <h2 className="text-lg font-bold">Current sale</h2>
         {count > 0 && (
-          <button onClick={reset} className="flex items-center gap-1 text-sm text-stone-500"><Trash2 size={15} /> Clear</button>
+          <button onClick={() => { if (confirm("Remove everything from this sale?")) reset(); }} className="flex items-center gap-1 text-sm text-stone-500"><Trash2 size={15} /> Clear</button>
         )}
       </div>
       {lines.length === 0 ? (
@@ -166,7 +191,7 @@ export default function PosClient({ products, isAdmin }: { products: Product[]; 
                 <label className="basis-full pl-1 text-xs text-stone-600">
                   <input type="checkbox" className="mr-1.5 h-3.5 w-3.5 accent-orange-600" checked={!noEmpty[p.id]}
                     onChange={(e) => setNoEmpty((m) => ({ ...m, [p.id]: !e.target.checked }))} />
-                  Customer returned an empty
+                  Customer brought back an empty cylinder (swap)
                 </label>
               )}
             </div>
@@ -177,18 +202,21 @@ export default function PosClient({ products, isAdmin }: { products: Product[]; 
       {valid.length > 0 && (
         <div className="mt-4 space-y-3 border-t border-stone-200 pt-4">
           <div className="grid grid-cols-4 gap-1.5">
-            {(["Cash", "M-Pesa", "Card", "Credit"] as const).map((m) => (
-              <button key={m} onClick={() => setPay(m)}
-                className={`rounded-xl px-1 py-2.5 text-[13px] font-bold ring-1 ${pay === m ? "bg-stone-900 text-white ring-stone-900" : "bg-white ring-stone-300"}`}>
-                {m === "Credit" ? "Pay later" : m}
-              </button>
-            ))}
+            {(["Cash", "M-Pesa", "Card", "Credit"] as const).map((m) => {
+              const PayIcon = PAY_ICON[m];
+              return (
+                <button key={m} onClick={() => setPay(m)}
+                  className={`flex flex-col items-center gap-0.5 rounded-xl px-1 py-2 text-[13px] font-bold ring-1 ${pay === m ? "bg-stone-900 text-white ring-stone-900" : "bg-white ring-stone-300"}`}>
+                  <PayIcon size={15} />
+                  {m === "Credit" ? "Pay later" : m}
+                </button>
+              );
+            })}
           </div>
           {pay === "Cash" && (
             <div>
               <label className="label">Cash received (optional)</label>
-              <input className="input" inputMode="decimal" value={received} onChange={(e) => setReceived(e.target.value)} placeholder={String(total)} />
-              {received && <p className={`mt-1 text-sm font-semibold ${change < 0 ? "text-red-600" : "text-green-700"}`}>
+              <input className="input" inputMode="decimal" value={received} onChange={(e) => setReceived(e.target.value)} placeholder={String(total)} />              {received && <p className={`mt-1 text-sm font-semibold ${change < 0 ? "text-red-600" : "text-green-700"}`}>
                 {change < 0 ? `Short by ${money(-change)}. Choose Pay later to record the balance.` : `Change: ${money(change)}`}</p>}
             </div>
           )}
@@ -201,13 +229,10 @@ export default function PosClient({ products, isAdmin }: { products: Product[]; 
           {pay === "Credit" && (
             <div className="space-y-2 rounded-xl bg-amber-50 p-3 text-sm">
               <p className="font-semibold text-amber-900">Customer takes the goods and pays later</p>
-              <input className="input" value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Customer name (required)" />
-              <input className="input" inputMode="tel" value={custPhone} onChange={(e) => setCustPhone(e.target.value)} placeholder="Phone (optional)" />
-              <div>
-                <label className="label">Paying now (leave empty if nothing)</label>
+              <input className="input" value={custName} onChange={(e) => setCustName(e.target.value)} placeholder="Customer name (required)" />              <div>
+                <label className="label">Amount paid now (leave empty if nothing)</label>
                 <input className="input" inputMode="decimal" value={paidNow} placeholder="0"
-                  onChange={(e) => /^d*.?d{0,2}$/.test(e.target.value) && setPaidNow(e.target.value)} />
-              </div>
+                  onChange={(e) => /^\d*\.?\d{0,2}$/.test(e.target.value) && setPaidNow(e.target.value)} />              </div>
               {Number(paidNow) > 0 && (
                 <div className="grid grid-cols-3 gap-1.5">
                   {(["Cash", "M-Pesa", "Card"] as const).map((m) => (
@@ -219,13 +244,13 @@ export default function PosClient({ products, isAdmin }: { products: Product[]; 
               {Number(paidNow) > 0 && paidNowMethod === "M-Pesa" && (
                 <input className="input uppercase" value={mpesaRef} onChange={(e) => setMpesaRef(e.target.value)} placeholder="M-Pesa code" />
               )}
-              <div>
-                <label className="label">Promised to pay by (optional)</label>
-                <input type="date" className="input" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+              <div className="space-y-0.5 font-semibold">
+                <div className="flex justify-between text-stone-700"><span>Total</span><span>{money(total)}</span></div>
+                <div className="flex justify-between text-green-700"><span>Paid now</span><span>{money(Math.min(Number(paidNow) || 0, total))}</span></div>
+                <p className={`flex justify-between font-bold ${owing <= 0 ? "text-red-600" : "text-amber-900"}`}>
+                  {owing <= 0 ? <span>That covers the full amount. Choose Cash, M-Pesa or Card instead.</span> : <><span>Pending balance</span><span>{money(owing)}</span></>}
+                </p>
               </div>
-              <p className={`font-bold ${owing <= 0 ? "text-red-600" : "text-amber-900"}`}>
-                {owing <= 0 ? "That covers the full amount. Choose Cash, M-Pesa or Card instead." : `Balance owed: ${money(owing)}`}
-              </p>
             </div>
           )}
           <details className="rounded-xl bg-stone-50 p-3 text-sm">
@@ -266,24 +291,15 @@ export default function PosClient({ products, isAdmin }: { products: Product[]; 
           ))}
         </div>
         {error && !sheet && <p className="mb-3 rounded-lg bg-red-50 p-3 text-sm text-red-700 md:hidden">{error}</p>}
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
-          {shown.map((p) => {
-            const inCart = cart[p.id] || 0;
-            const out = p.track && p.stock <= 0;
-            const low = p.track && p.stock > 0 && p.stock <= p.low;
-            return (
-              <button key={p.id} onClick={() => add(p)} disabled={out}
-                className={`relative rounded-2xl bg-white p-3 text-left shadow-sm ring-1 transition active:scale-[0.97] disabled:opacity-40 ${inCart ? "ring-2 ring-orange-500" : "ring-stone-200"}`}>
-                {inCart > 0 && <span className="absolute right-2 top-2 rounded-full bg-orange-600 px-2 py-0.5 text-xs font-bold text-white">{qty(inCart, p.unit)}</span>}
-                <p className="pr-6 font-bold leading-tight">{p.name}</p>
-                <p className="mt-2 text-lg font-black text-orange-700">{money(p.price)}{isMetres(p.unit) && <span className="text-xs font-semibold text-stone-500"> /m</span>}</p>
-                <p className={`text-xs ${out ? "text-red-600" : low ? "text-amber-600" : "text-stone-400"}`}>
-                  {!p.track ? "Not tracked" : out ? "Out of stock" : `${qty(p.stock, p.unit)} in stock`}
-                </p>
-              </button>
-            );
-          })}
-        </div>
+        {popularItems.length > 0 && (
+          <>
+            <p className="mb-2 flex items-center gap-1.5 text-xs font-bold text-stone-500"><Star size={13} className="text-orange-600" /> Most sold</p>
+            <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{popularItems.map(tile)}</div>
+            {rest.length > 0 && <p className="mb-2 text-xs font-bold text-stone-500">All items</p>}
+          </>
+        )}
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">{rest.map(tile)}</div>
+        {shown.length === 0 && <p className="py-8 text-center text-sm text-stone-400">No item matches "{q}".</p>}
       </section>
 
       {/* Desktop cart */}

@@ -27,7 +27,7 @@ export async function checkout(input: CheckoutInput): Promise<{ ok?: boolean; id
   if (!["Cash", "M-Pesa", "Card", "Credit"].includes(input.paymentMethod)) return { error: "Choose a payment method." };
   const isCredit = input.paymentMethod === "Credit";
   if (isCredit && !input.customerName?.trim()) return { error: "Enter the customer's name so you can follow up on the bill." };
-  if (isCredit && input.dueDate && !/^d{4}-d{2}-d{2}$/.test(input.dueDate)) return { error: "That date isn't valid." };
+  if (isCredit && input.dueDate && !/^\d{4}-\d{2}-\d{2}$/.test(input.dueDate)) return { error: "That date isn't valid." };
 
   const sql = db();
   const ids = (input.items || []).map((i) => Number(i.productId));
